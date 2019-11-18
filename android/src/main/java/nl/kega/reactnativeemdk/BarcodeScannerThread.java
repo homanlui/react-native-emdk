@@ -79,15 +79,10 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
 
             if (this.barcodeManager != null){
 
-                Scanner locscanner = barcodeManager.getDevice(DeviceIdentifier.DEFAULT);
-                if (locscanner.isEnabled()) {
-                  Log.v("[BarcodeScanner]", "Scanner is already enabled");
-                } else {
-                  locscanner.enable();
-                }
-                locscanner.addDataListener(this);
-                locscanner.addStatusListener(this);
-                this.scanner = locscanner;
+                this.scanner = barcodeManager.getDevice(DeviceIdentifier.DEFAULT);
+                this.scanner.addDataListener(this);
+                this.scanner.addStatusListener(this);
+                this.scanner.enable();
 
                 WritableMap event = Arguments.createMap();
                 event.putString("StatusEvent", "opened");
@@ -107,21 +102,22 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
         if (this.scanner != null){
 
             try {
-                Scanner locscanner = this.scanner;
+
+                this.scanner.cancelRead();
+                this.scanner.disable();
+                this.scanner.removeDataListener(this);
+                this.scanner.removeStatusListener(this);
                 this.scanner = null;
-                locscanner.cancelRead();
-                locscanner.disable();
-                locscanner.removeDataListener(this);
-                locscanner.removeStatusListener(this);
-                locscanner.release();
+
                 WritableMap event = Arguments.createMap();
                 event.putString("StatusEvent", "destroyed");
 
                 this.dispatchEvent("StatusEvent", event);
 
             } catch (ScannerException e) {
-                Log.e("[BarcodeScanner]", "destroy scanner error: " + e, e);
-	          } catch (NullPointerException e) {
+               Log.e("[BarcodeScanner]", "destroy scanner error: " + e, e);
+
+	           } catch (NullPointerException e) {
 
             }
 
@@ -131,8 +127,6 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
 
     @Override
     public void onOpened(EMDKManager emdkManager) {
-        Log.v("[BarcodeScanner]", "On opened");
-
         this.emdkManager = emdkManager;
 
         this.initScanner();
@@ -181,16 +175,16 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException e) {
-                        Log.e("[BarcodeScanner]", "onStatus error: " + e);
-                        e.printStackTrace();
+                        Log.e("[BarcodeScanner]", "onStatus error: " + e, e);
+                        // e.printStackTrace();
                     }
 
-                    if (this.scanner != null && this.reading){
+                    if (this.scanner != null && this.reading && !this.scanner.isReadPending()){
                         this.scanner.read();
                     }
 
                 } catch (ScannerException e) {
-                    Log.e("[BarcodeScanner]", "onStatus error: " + e);
+                    Log.e("[BarcodeScanner]", "onStatus error: " + e, e);
                 }
 
                 event.putString("StatusEvent", "Scanner is enabled and idle");
@@ -224,14 +218,13 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
     public void dispatchEvent(String name, WritableArray data) {}
 
     public void onHostResume() {
+        Log.d("[BarcodeScanner]", "On host resume");
 
         if (this.emdkManager != null){
-
-            if (this.scanner == null) {
-                this.initScanner();
-            }
-
+            this.initScanner();
             if (this.reading){
+                Log.d("[BarcodeScanner]", "On host resume - set to read");
+
                 this.read(this.config);
             }
         } else {
@@ -241,56 +234,44 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
     }
 
     public void onHostPause() {
+        Log.d("[BarcodeScanner]", "On host pause");
+        this.destroyScanner();
 
-         this.destroyScanner();
+        if (this.barcodeManager != null){
+            this.barcodeManager = null;
+        }
 
-         try {
-           if (this.barcodeManager != null){
-               this.barcodeManager = null;
-           }
-
-           if (this.emdkManager != null) {
-               this.emdkManager.release(FEATURE_TYPE.BARCODE);
-           }
-         } catch (NullPointerException e) {
-
-         }
+        if (this.emdkManager != null) {
+            this.emdkManager.release(FEATURE_TYPE.BARCODE);
+        }
 
     }
 
     public void onHostDestroy() {
-
+        Log.d("[BarcodeScanner]", "On host destroy");
         this.destroyScanner();
 
-        try {
-          if (this.barcodeManager != null){
-              this.barcodeManager = null;
-          }
+        if (this.barcodeManager != null){
+            this.barcodeManager = null;
+        }
 
-          if (this.emdkManager != null) {
-              this.emdkManager.release(FEATURE_TYPE.BARCODE);
-          }
-        } catch (NullPointerException e) {
-
+        if (this.emdkManager != null) {
+            this.emdkManager.release(FEATURE_TYPE.BARCODE);
         }
 
     }
 
     public void onCatalystInstanceDestroy() {
-
+        Log.e("[BarcodeScanner]", "On catalyst destroy");
         this.destroyScanner();
-        try {
-          if (this.barcodeManager != null){
-              this.barcodeManager = null;
-          }
 
-          if (this.emdkManager != null) {
-              this.emdkManager.release(FEATURE_TYPE.BARCODE);
-          }
-        } catch (NullPointerException e) {
-
+        if (this.barcodeManager != null){
+            this.barcodeManager = null;
         }
 
+        if (this.emdkManager != null) {
+            this.emdkManager.release(FEATURE_TYPE.BARCODE);
+        }
     }
 
     public void init() {
@@ -471,7 +452,7 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
 
             this.scanner.read();
         } catch (ScannerException e) {
-            Log.e("[BarcodeScanner]", "Read error: " + e);
+            Log.e("[BarcodeScanner]", "Read error: " + e, e);
         }
 
     }
@@ -483,22 +464,17 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
                 this.reading = false;
             }
         } catch (ScannerException e) {
-            Log.e("[BarcodeScanner]", "Cancel error: " + e);
+            Log.e("[BarcodeScanner]", "Cancel error: " + e, e);
         }
     }
 
     public void disable() {
-        if(this.scanner != null){
-            //this.scanner.disable();
-            destroyScanner();
-
-        }
-        if (this.barcodeManager != null){
-            this.barcodeManager = null;
-        }
-
-        if (this.emdkManager != null) {
-            this.emdkManager.release(FEATURE_TYPE.BARCODE);
+        try {
+            if(this.scanner != null){
+                this.scanner.disable();
+            }
+        } catch (ScannerException e) {
+            Log.e("[BarcodeScanner]", "Read error: " + e, e);
         }
     }
 
@@ -508,7 +484,7 @@ public class BarcodeScannerThread extends Thread implements EMDKListener, DataLi
                 this.scanner.enable();
             }
         } catch (ScannerException e) {
-            Log.e("[BarcodeScanner]", "Read error: " + e);
+            Log.e("[BarcodeScanner]", "Read error: " + e, e);
         }
     }
 

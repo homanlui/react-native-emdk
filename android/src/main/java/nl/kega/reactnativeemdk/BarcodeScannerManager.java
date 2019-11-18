@@ -28,7 +28,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public class BarcodeScannerManager extends ReactContextBaseJavaModule implements LifecycleEventListener {
-    
+
     public final ReactApplicationContext context;
 
     private BarcodeScannerThread scannerthread = null;
@@ -38,7 +38,7 @@ public class BarcodeScannerManager extends ReactContextBaseJavaModule implements
 
         this.context = reactContext;
         this.context.addLifecycleEventListener(this);
-     
+
         if(android.os.Build.MANUFACTURER.contains("Zebra Technologies") || android.os.Build.MANUFACTURER.contains("Motorola Solutions") ) {
             this.scannerthread = new BarcodeScannerThread(this.context) {
 
@@ -56,7 +56,7 @@ public class BarcodeScannerManager extends ReactContextBaseJavaModule implements
                 public void dispatchEvent(String name, WritableArray data) {
                     BarcodeScannerManager.this.context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(name, data);
                 }
-                
+
             };
             scannerthread.start();
         }
@@ -70,7 +70,7 @@ public class BarcodeScannerManager extends ReactContextBaseJavaModule implements
     public String getName() {
         return "BarcodeScannerManager";
     }
-    
+
     @Override
     public void onHostResume() {
         if (this.scannerthread != null) {
@@ -96,6 +96,13 @@ public class BarcodeScannerManager extends ReactContextBaseJavaModule implements
     public void onCatalystInstanceDestroy() {
         if (this.scannerthread != null) {
             this.scannerthread.onCatalystInstanceDestroy();
+        }
+    }
+
+    @Override
+    public void initialize() {
+        if (this.scannerthread != null) {
+            this.scannerthread.init();
         }
     }
 
